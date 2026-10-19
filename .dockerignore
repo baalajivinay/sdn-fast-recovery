@@ -1,0 +1,10 @@
+*
+!sdnrec/
+!experiments/
+!sim/
+!tests/
+!docs/REPLICATION.md
+!results/summary.json
+!docker/constraints.txt
+!docker/entrypoint.sh
+**/__pycache__

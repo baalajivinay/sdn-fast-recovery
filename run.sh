@@ -13,6 +13,9 @@
 #   ./run.sh sim              model-based draft results into results_sim/
 #   ./run.sh shell            shell inside the testbed container
 #
+# This mounts the repo over /work so local edits take effect without a rebuild.
+# To replicate without cloning, use the published image (see README).
+#
 set -euo pipefail
 
 IMAGE="sdnrec-vanadrichem:latest"
@@ -57,35 +60,13 @@ cmd="${1:-help}"; shift || true
 case "$cmd" in
     check) check ;;
     build)
-        cp /etc/ssl/certs/ca-certificates.crt "${REPO}/docker/ca-certificates.crt"
         base_arg=()
         if docker image inspect "${OLD_IMAGE}" >/dev/null 2>&1; then
             echo "reusing ${OLD_IMAGE} as base (already has os-ken + matplotlib)"
             base_arg=(--build-arg "BASE=${OLD_IMAGE}")
         fi
-        docker build --network host "${base_arg[@]}" -t "${IMAGE}" "${REPO}/docker"
+        docker build --network host "${base_arg[@]}" -t "${IMAGE}" "${REPO}"
         ;;
-    test)
-        "${RUN[@]}" bash -c "python3 tests/test_routing.py && python3 tests/test_controller.py"
-        ;;
-    smoke)
-        "${RUN[@]}" bash -c "python3 experiments/run_suite.py --exp e1 --trials 1 \
-            --results-dir results/smoke && python3 experiments/analyze.py --results-dir results/smoke"
-        ;;
-    quick)
-        "${RUN[@]}" bash -c "python3 experiments/run_suite.py --exp all --quick \
-            --results-dir results/quick && python3 experiments/analyze.py --results-dir results/quick"
-        ;;
-    full)
-        "${RUN[@]}" bash -c "python3 experiments/run_suite.py --exp all && \
-            python3 experiments/analyze.py --results-dir results"
-        ;;
-    suite)   "${RUN[@]}" python3 experiments/run_suite.py "$@" ;;
-    analyze) "${RUN[@]}" python3 experiments/analyze.py --results-dir "${1:-results}" ;;
-    sim)
-        "${RUN[@]}" bash -c "python3 sim/simulate.py && \
-            python3 experiments/analyze.py --results-dir results_sim"
-        ;;
-    shell)   "${RUN[@]}" /bin/bash ;;
+    test|smoke|quick|full|suite|analyze|sim|shell) "${RUN[@]}" "$cmd" "$@" ;;
     *)       sed -n '3,15p' "${BASH_SOURCE[0]}"; exit 1 ;;
 esac

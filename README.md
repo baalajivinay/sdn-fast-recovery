@@ -48,25 +48,49 @@ Measured on Mininet 2.3, Open vSwitch 2.17.5 and os-ken, 325 trials. Controller 
 Full numbers are in [`results/summary.json`](results/summary.json) and the figures in
 [`results/figures/`](results/figures/).
 
-## Quick start
+## Replicate it (one container)
 
-Needs Linux, Docker and the `openvswitch` kernel module. Everything else runs in the container.
+Everything needed is in one Docker image: Mininet 2.3, Open vSwitch 2.17.5, os-ken 4.2.1, the
+pinned Python packages of the measured run, and the experiment code. No clone needed.
+
+**Host requirements:** Linux, Docker, and the `openvswitch` kernel module (shipped with most
+distributions; the container loads it itself through `-v /lib/modules`). Stop any host Open
+vSwitch for the run (`sudo systemctl stop openvswitch-switch`), since two `ovs-vswitchd`
+instances share one kernel datapath.
 
 ```bash
-./run.sh check      # Docker, openvswitch module, host OVS conflict, leftover netem
-./run.sh build      # build the container image
-./run.sh test       # offline tests of routing and controller (no Mininet)
-./run.sh smoke      # 1 trial of every E1 config, about 2 minutes. Run this first.
-./run.sh quick      # every experiment, few trials, about 20 min  -> results/quick/
-./run.sh full       # every experiment, full trials, about 1 h    -> results/
+IMG=ghcr.io/baalajivinay/sdn-fast-recovery:v1.0
+mkdir -p results
+docker run --rm -it --privileged -v /lib/modules:/lib/modules:ro \
+    -e HOST_UID=$(id -u) -e HOST_GID=$(id -g) \
+    -v "$PWD/results:/work/results" $IMG smoke
 ```
 
-Each run writes `summary.json`, a printed table and PNG figures in `<results>/figures/`.
-`./run.sh sim` writes model-based placeholder results to `results_sim/`, stamped "SIMULATED".
-They are not measurements.
+Swap `smoke` for any command below. Running the image with no command prints this list.
 
-> If `./run.sh check` says `ovs-vswitchd` is running on the host, stop it for the run with
-> `sudo systemctl stop openvswitch-switch`. Two vswitchd instances share one kernel datapath.
+| Command | What it does | Time |
+|---|---|---|
+| `check` | is the openvswitch kernel module available? | seconds |
+| `test` | offline tests of routing and controller (needs no `--privileged`) | seconds |
+| `smoke` | 1 trial of every E1 config → `results/smoke/`. Run this first. | ~1–2 min |
+| `quick` | every experiment, few trials → `results/quick/` | ~20 min |
+| `full` | every experiment, full trials → `results/` (the published run) | ~1 h |
+| `suite …` | `run_suite.py` directly, e.g. `suite --exp e3 --trials 50` | |
+| `analyze [dir]` | recompute summary + figures | seconds |
+| `shell` | bash inside the testbed | |
+
+Each run writes `summary.json`, a printed table and PNG figures. The published numbers are
+inside the image at `/work/reference/summary.json` for comparison. `sim` writes model-based
+placeholder results to `results_sim/`, stamped "SIMULATED"; they are not measurements.
+
+**Building the image yourself:** `docker build -t sdn-fast-recovery .` from a clone. The base
+image is pinned by digest and Python packages by `docker/constraints.txt`.
+
+### Working on the code
+
+`./run.sh <command>` runs the same commands with the repo mounted over `/work`, so edits take
+effect without a rebuild. `./run.sh check` also checks for a host `ovs-vswitchd` and a
+leftover loopback delay, and `./run.sh build` builds the local image.
 
 ## Interactive simulator
 
@@ -104,7 +128,8 @@ experiments/   run_suite.py    experiment driver (Mininet)      suite_defs.py  t
                testbed.py      build net, BFD, failures, netem  traffic.py     probe stream
                analyze.py      traces -> summary.json            figures.py     PNG figures
 tests/         exhaustive routing test, controller test with fake switches
-docker/        container image (Mininet, OVS 2.17, os-ken) and entrypoint
+Dockerfile     the replication image (code + pinned environment)
+docker/        entrypoint.sh (command menu), constraints.txt (pinned Python packages)
 results/       summary.json and figures from the measured run
 sim/           simulate.py     model-based placeholder results, same file format
 app/           index.html      interactive simulator; media/ has demo recordings
