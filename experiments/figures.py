@@ -7,6 +7,7 @@ published numbers are always hollow grey markers.
 """
 
 import os
+import statistics
 
 import matplotlib
 matplotlib.use("Agg")
@@ -85,23 +86,31 @@ def fig_bfd_vs_paper(summary, outdir, made):
                              squeeze=False)
     for ax, (eid, topo, title) in zip(axes[0], panels):
         exp = summary["experiments"][eid]
-        pts = sorted([(c["bfd_ms"], c["recovery_ms"]) for c in exp["configs"].values()
-                      if c["scheme"] == "protection" and c["bfd_ms"] and c["recovery_ms"]
-                      and c["failure"] == "silent"], key=lambda t: t[0])
+        # Median and interquartile range: at T = 1 ms a single BFD flap (~1 s)
+        # dominates the mean and sd, which says nothing about typical recovery.
+        pts = []
+        for c in exp["configs"].values():
+            if c["scheme"] == "protection" and c["bfd_ms"] and c["failure"] == "silent":
+                v = [tr["recovery_ms"] for tr in c.get("trials", []) if tr.get("recovered")]
+                if len(v) >= 2:
+                    q1, med, q3 = statistics.quantiles(v, n=4)
+                    pts.append((c["bfd_ms"], statistics.median(v), q1, q3))
+        pts.sort()
         xs = [1, 5, 15]
         ax.fill_between(xs, [2 * x for x in xs], [3 * x for x in xs], color=COL["protection"],
                         alpha=0.10, lw=0, label="BFD theory: (M-1)·T to M·T, M=3")
         if pts:
-            ax.errorbar([p[0] for p in pts], [p[1]["mean"] for p in pts],
-                        yerr=[p[1]["sd"] for p in pts], color=COL["protection"], marker="o",
-                        ms=7, capsize=3, label="this replication", mec=SURF, mew=2)
+            ax.errorbar([p[0] for p in pts], [p[1] for p in pts],
+                        yerr=[[p[1] - p[2] for p in pts], [p[3] - p[1] for p in pts]],
+                        color=COL["protection"], marker="o", ms=7, capsize=3,
+                        label="this replication (median, IQR)", mec=SURF, mew=2)
         paper = summary["paper"].get(topo, {})
         px = sorted(int(k) for k in paper)
         ax.errorbar([x * 1.06 for x in px], [paper[str(x)][0] if str(x) in paper else paper[x][0]
                                              for x in px],
                     yerr=[paper[str(x)][1] if str(x) in paper else paper[x][1] for x in px],
                     color=PAPER_C, marker="s", ms=7, mfc="none", ls="none", capsize=3,
-                    label="van Adrichem et al. 2014")
+                    label="van Adrichem et al. 2014 (mean ± sd)")
         ax.axhline(50, color=INK2, lw=1)
         ax.set_xticks(xs)
         ax.set_xlabel("BFD transmit interval T (ms)")

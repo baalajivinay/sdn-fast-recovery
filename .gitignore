@@ -1,4 +1,6 @@
-results/
+results/*
+!results/summary.json
+!results/figures/
 results_sim/*/
 __pycache__/
 *.pyc
