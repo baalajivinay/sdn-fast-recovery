@@ -1,0 +1,116 @@
+[entrypoint] note: could not modprobe openvswitch; using the host's loaded module
+[entrypoint] Open vSwitch 2.17.5 ready
+
+=== e1 on triangle: 8 configs x 1 controller delays x 10 trials ===
+Unable to contact the remote controller at 127.0.0.1:6653
+  restoration_los_carrier_cd10             10/10 ok
+  protection_los_carrier_cd10              10/10 ok
+  restoration_los_silent_cd10              10/10 ok
+  protection_los_silent_cd10               10/10 ok
+  restoration_bfd5_silent_cd10             10/10 ok
+   protection_bfd1_silent_cd10 trial 9 FAILED: no connectivity h1->h2 before the cut:
+PING 10.0.0.2 (10.0.0.2) 56(84) bytes of data.
+
+--- 10.0.0.2 ping statistics ---
+1 packets transmitted, 0 received, 100% packet loss, time 0ms
+
+
+   protection_bfd1_silent_cd10 trial 10 FAILED: no connectivity h1->h2 before the cut:
+PING 10.0.0.2 (10.0.0.2) 56(84) bytes of data.
+
+--- 10.0.0.2 ping statistics ---
+1 packets transmitted, 0 received, 100% packet loss, time 0ms
+
+
+  protection_bfd1_silent_cd10              8/10 ok
+  protection_bfd5_silent_cd10              10/10 ok
+  protection_bfd15_silent_cd10             10/10 ok
+
+=== e2 on ring5: 5 configs x 1 controller delays x 10 trials ===
+Unable to contact the remote controller at 127.0.0.1:6653
+  protection_bfd1_silent_cd10              10/10 ok
+  protection_bfd5_silent_cd10              10/10 ok
+  protection_bfd15_silent_cd10             10/10 ok
+  restoration_bfd5_silent_cd10             10/10 ok
+  hybrid_bfd5_silent_cd10                  10/10 ok
+
+=== e3 on usnet: 4 configs x 1 controller delays x 30 trials ===
+Unable to contact the remote controller at 127.0.0.1:6653
+  protection_bfd5_silent_cd10              30/30 ok
+  protection_bfd15_silent_cd10             30/30 ok
+  restoration_bfd5_silent_cd10             30/30 ok
+  hybrid_bfd5_silent_cd10                  30/30 ok
+
+=== e4 on ring5: 3 configs x 5 controller delays x 5 trials ===
+Unable to contact the remote controller at 127.0.0.1:6653
+  restoration_bfd5_silent_cd0              5/5 ok
+  protection_bfd5_silent_cd0               5/5 ok
+  hybrid_bfd5_silent_cd0                   5/5 ok
+  restoration_bfd5_silent_cd5              5/5 ok
+  protection_bfd5_silent_cd5               5/5 ok
+  hybrid_bfd5_silent_cd5                   5/5 ok
+  restoration_bfd5_silent_cd10             5/5 ok
+  protection_bfd5_silent_cd10              5/5 ok
+  hybrid_bfd5_silent_cd10                  5/5 ok
+  restoration_bfd5_silent_cd25             5/5 ok
+  protection_bfd5_silent_cd25              5/5 ok
+  hybrid_bfd5_silent_cd25                  5/5 ok
+  restoration_bfd5_silent_cd50             5/5 ok
+  protection_bfd5_silent_cd50              5/5 ok
+  hybrid_bfd5_silent_cd50                  5/5 ok
+
+Done. Next: ./run.sh analyze
+
+== e1 (triangle) ==
+  config                                       n recovered recovery ms (mean±sd) extra loss
+  restoration_los_carrier_cd10                10   10/10           25.54 ± 1.73        0.0
+  protection_los_carrier_cd10                 10   10/10            2.84 ± 0.21        0.0
+  restoration_los_silent_cd10                 10    0/10                  never        0.0
+  protection_los_silent_cd10                  10    0/10                  never        0.0
+  restoration_bfd5_silent_cd10                10   10/10           35.10 ± 1.23        0.0
+  protection_bfd1_silent_cd10                  8    8/8         107.70 ± 290.89      -33.6
+  protection_bfd5_silent_cd10                 10   10/10           16.70 ± 2.24        0.0
+  protection_bfd15_silent_cd10                10   10/10           39.62 ± 5.61        0.0
+
+== e2 (ring5) ==
+  config                                       n recovered recovery ms (mean±sd) extra loss
+  protection_bfd1_silent_cd10                 10    2/10       1241.00 ± 330.36      349.4
+  protection_bfd5_silent_cd10                 10    0/10                  never        0.0
+  protection_bfd15_silent_cd10                10    0/10                  never        0.0
+  restoration_bfd5_silent_cd10                10   10/10           38.12 ± 3.18        0.0
+  hybrid_bfd5_silent_cd10                     10   10/10           38.62 ± 2.16        0.0
+
+== e3 (usnet) ==
+  config                                       n recovered recovery ms (mean±sd) extra loss
+  protection_bfd5_silent_cd10                 30   30/30           16.49 ± 2.25        0.0
+  protection_bfd15_silent_cd10                30   30/30           40.91 ± 4.05        0.0
+  restoration_bfd5_silent_cd10                30   30/30           48.72 ± 4.37        0.0
+  hybrid_bfd5_silent_cd10                     30   30/30           16.90 ± 3.10        7.8
+
+== e4 (ring5) ==
+  config                                       n recovered recovery ms (mean±sd) extra loss
+  restoration_bfd5_silent_cd0                  5    5/5            21.08 ± 0.99        0.0
+  protection_bfd5_silent_cd0                   5    0/5                   never        0.0
+  hybrid_bfd5_silent_cd0                       5    5/5            21.88 ± 1.87        0.0
+  restoration_bfd5_silent_cd5                  5    5/5            28.68 ± 1.49        0.0
+  protection_bfd5_silent_cd5                   5    0/5                   never        0.0
+  hybrid_bfd5_silent_cd5                       5    5/5            27.20 ± 1.23        0.0
+  restoration_bfd5_silent_cd10                 5    5/5            39.52 ± 2.82        0.0
+  protection_bfd5_silent_cd10                  5    0/5                   never        0.0
+  hybrid_bfd5_silent_cd10                      5    5/5            38.32 ± 1.69        0.0
+  restoration_bfd5_silent_cd25                 5    5/5            69.48 ± 2.54        0.0
+  protection_bfd5_silent_cd25                  5    0/5                   never        0.0
+  hybrid_bfd5_silent_cd25                      5    5/5            68.00 ± 1.91        0.0
+  restoration_bfd5_silent_cd50                 5    5/5           117.80 ± 1.30        0.0
+  protection_bfd5_silent_cd50                  5    0/5                   never        0.0
+  hybrid_bfd5_silent_cd50                      5    5/5           118.08 ± 1.49        0.0
+
+wrote results/summary.json
+wrote results/figures/fig1_detection.png
+wrote results/figures/fig2_bfd_vs_paper.png
+wrote results/figures/fig3_ring_timeline.png
+wrote results/figures/fig4_usnet_cdf.png
+wrote results/figures/fig5_controller_distance.png
+wrote results/figures/fig6_state_cost.png
+exit=0
+qdisc noqueue 0: root refcnt 2 

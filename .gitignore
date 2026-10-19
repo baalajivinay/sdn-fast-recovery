@@ -1,0 +1,8 @@
+results/
+results_sim/*/
+__pycache__/
+*.pyc
+docker/ca-certificates.crt
+build/
+dist/
+results_run1_crankback_bug/*/

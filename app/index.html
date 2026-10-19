@@ -1,0 +1,1238 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SDN Recovery Simulator</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --toolbar-bg:#e8e8e8;--toolbar-border:#b0b0b0;
+  --canvas-bg:#ffffff;--panel-bg:#f0f0f0;--panel-border:#a0a0a0;
+  --text:#1a1a1a;--text2:#555;--text3:#888;
+  --accent:#2860a8;--red:#cc2222;--green:#1a8a1a;--amber:#cc8800;
+  --teal:#0a7a6a;--violet:#6a3aaa;
+  --switch-fill:#4488cc;--switch-stroke:#2860a8;
+  --host-fill:#cc4444;--host-stroke:#992222;
+  --ctrl-fill:#ddaa22;--ctrl-stroke:#aa7700;
+  --link-default:#444;--link-primary:#2860a8;
+}
+html,body{height:100%;overflow:hidden}
+body{
+  font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;
+  background:#d0d0d0;color:var(--text);
+  display:flex;flex-direction:column;
+}
+
+/* ---- Menu bar ---- */
+.menu-bar{
+  display:flex;align-items:center;
+  padding:2px 6px;
+  background:var(--toolbar-bg);
+  border-bottom:1px solid var(--toolbar-border);
+  flex-shrink:0;
+}
+.menu-bar .app-title{
+  font-size:13px;font-weight:700;color:var(--accent);
+  padding:4px 10px;border-right:1px solid var(--toolbar-border);
+  margin-right:8px;
+}
+.menu-bar .menu-item{
+  font-size:12px;padding:4px 10px;cursor:default;
+  border-radius:3px;color:var(--text);
+}
+.menu-bar .menu-item:hover{background:#c8c8c8}
+
+/* ---- Toolbar ---- */
+.toolbar{
+  display:flex;align-items:center;gap:8px;
+  padding:5px 10px;
+  background:linear-gradient(to bottom, #f2f2f2, #dcdcdc);
+  border-bottom:1px solid var(--toolbar-border);
+  flex-shrink:0;flex-wrap:wrap;
+}
+.toolbar label{
+  font-size:11px;color:var(--text);display:flex;align-items:center;gap:4px;
+  white-space:nowrap;
+}
+.toolbar select,.toolbar input[type=number]{
+  background:#fff;border:1px solid #aaa;color:var(--text);
+  padding:3px 6px;font-size:11px;font-family:inherit;
+  outline:none;min-width:50px;
+}
+.toolbar select:focus,.toolbar input:focus{border-color:var(--accent)}
+.toolbar .sep{width:1px;height:20px;background:var(--toolbar-border);margin:0 4px}
+.btn{
+  padding:4px 14px;border:1px solid #888;border-radius:3px;font-size:11px;font-weight:600;
+  cursor:pointer;font-family:inherit;
+  background:linear-gradient(to bottom, #f5f5f5, #ddd);
+  color:var(--text);
+}
+.btn:hover{background:linear-gradient(to bottom, #fff, #e8e8e8)}
+.btn:active{background:linear-gradient(to bottom, #d0d0d0, #e0e0e0)}
+.btn-primary{background:linear-gradient(to bottom, #5a9adf, #3a78bf);color:#fff;border-color:#2860a8}
+.btn-primary:hover{background:linear-gradient(to bottom, #6aaaef, #4a88cf)}
+.btn-primary:disabled{opacity:0.5;cursor:default}
+
+/* ---- Grid ---- */
+.grid{
+  flex:1;display:grid;
+  grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;
+  gap:3px;padding:3px;
+  min-height:0;
+  background:#b0b0b0;
+}
+
+/* ---- Panel ---- */
+.panel{
+  background:var(--panel-bg);border:1px solid var(--panel-border);
+  display:flex;flex-direction:column;overflow:hidden;position:relative;
+  min-height:0;
+}
+.panel-header{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:4px 10px;
+  background:linear-gradient(to bottom, #e4e4e4, #d0d0d0);
+  border-bottom:1px solid var(--panel-border);
+  flex-shrink:0;
+}
+.panel-title{
+  font-size:11px;font-weight:700;display:flex;align-items:center;gap:6px;
+  color:var(--text);
+}
+.panel-title .icon{
+  width:16px;height:12px;border-radius:2px;display:inline-block;
+  border:1px solid rgba(0,0,0,0.3);
+}
+.panel-phase{
+  font-size:10px;color:var(--text3);font-weight:500;
+  font-family:'Courier New',monospace;
+}
+.panel-phase.active{color:var(--amber);font-weight:700}
+.panel-phase.done{color:var(--green);font-weight:700}
+.panel-phase.fail{color:var(--red);font-weight:700}
+.panel-canvas-wrap{
+  flex:1;position:relative;min-height:0;
+  background:var(--canvas-bg);
+  border:1px inset #ccc;
+  margin:2px;
+}
+.panel-canvas-wrap canvas{
+  display:block;width:100%;height:100%;
+}
+
+/* ---- Results overlay ---- */
+.panel-results{
+  position:absolute;bottom:0;left:0;right:0;
+  background:rgba(240,240,240,0.95);
+  border-top:1px solid var(--panel-border);
+  padding:6px 10px;
+  transform:translateY(100%);
+  transition:transform 0.4s ease;
+  pointer-events:none;
+  font-family:'Courier New',monospace;
+}
+.panel-results.visible{transform:translateY(0)}
+.result-row{
+  display:flex;justify-content:space-between;align-items:baseline;
+  padding:1px 0;font-size:11px;
+}
+.result-row .rk{color:var(--text3);font-family:'Segoe UI',sans-serif}
+.result-row .rv{font-weight:700;font-variant-numeric:tabular-nums}
+.result-row .rv.good{color:var(--green)}
+.result-row .rv.bad{color:var(--red)}
+.result-big{
+  font-size:22px;font-weight:700;text-align:center;margin-bottom:4px;
+  line-height:1.1;font-family:'Courier New',monospace;
+}
+
+/* ---- Progress bar ---- */
+.progress-bar{
+  height:2px;background:#ccc;flex-shrink:0;
+}
+.progress-fill{
+  height:100%;width:0%;transition:width 0.1s linear;
+}
+
+/* ---- Status bar ---- */
+.status-bar{
+  display:flex;align-items:center;gap:16px;
+  padding:3px 10px;flex-shrink:0;
+  border-top:1px solid var(--toolbar-border);
+  background:var(--toolbar-bg);
+  font-size:10px;color:var(--text2);
+  font-family:'Courier New',monospace;
+}
+.status-bar .legend{display:flex;align-items:center;gap:4px}
+.status-bar .lc{width:16px;height:2px;display:inline-block}
+
+/* ---- Console output ---- */
+.console{
+  flex-shrink:0;
+  height:60px;
+  background:#1a1a2e;color:#00ff41;
+  font-family:'Courier New',monospace;font-size:11px;
+  padding:4px 8px;
+  overflow-y:auto;
+  border-top:1px solid var(--toolbar-border);
+}
+.console .line{padding:1px 0}
+.console .prompt{color:#888}
+.console .info{color:#00ff41}
+.console .warn{color:#ffaa00}
+.console .err{color:#ff4444}
+
+/* ---- Modal ---- */
+.modal-overlay{
+  position:fixed;top:0;left:0;right:0;bottom:0;
+  background:rgba(0,0,0,0.4);z-index:100;
+  display:flex;align-items:center;justify-content:center;
+}
+.modal-box{
+  background:#f5f5f5;border:1px solid #999;border-radius:6px;
+  padding:16px 20px;max-width:460px;width:90%;
+  box-shadow:0 4px 20px rgba(0,0,0,0.3);
+  font-size:12px;color:#1a1a1a;
+}
+.modal-title{font-size:15px;font-weight:700;color:#2860a8;margin-bottom:8px}
+.modal-body p{line-height:1.5}
+</style>
+</head>
+<body>
+
+<div class="menu-bar">
+  <span class="app-title">SDN Recovery Simulator</span>
+  <span class="menu-item" id="menu-about" title="About this simulator">About</span>
+</div>
+
+<div class="modal-overlay" id="modal-overlay" style="display:none">
+  <div class="modal-box">
+    <div class="modal-title">SDN Recovery Simulator</div>
+    <div class="modal-body">
+      <p>Replication of van Adrichem et al., EWSDN 2014</p>
+      <p style="margin-top:6px"><b>Recovery methods compared:</b></p>
+      <ul style="margin:4px 0 4px 18px;font-size:11px">
+        <li><b>Restoration</b> — Controller recomputes path after failure notification</li>
+        <li><b>Protection (LoS)</b> — Pre-installed backup via fast-failover groups, triggered by carrier loss</li>
+        <li><b>Protection + BFD</b> — Same as above but uses BFD probing to detect silent failures</li>
+        <li><b>Hybrid</b> — BFD fast-failover + controller re-optimization of backup path</li>
+      </ul>
+      <p style="margin-top:6px;font-size:11px"><b>Nodes:</b> Red circles = hosts (endpoints) &middot; Blue rectangles = OpenFlow switches &middot; Yellow circle = SDN controller</p>
+      <p style="margin-top:6px;font-size:10px;color:#888">Model-based simulation calibrated against published results. Time scaled for visibility.</p>
+    </div>
+    <button class="btn" id="modal-close" style="margin-top:8px;width:100%">Close</button>
+  </div>
+</div>
+
+<div class="toolbar">
+  <label>Topology:
+    <select id="cfg-topo">
+      <option value="ring">Ring</option>
+      <option value="triangle">Triangle</option>
+      <option value="grid">Grid / Mesh</option>
+    </select>
+  </label>
+  <label>Switches:
+    <input type="number" id="cfg-switches" value="5" min="3" max="16" style="width:50px">
+  </label>
+  <div class="sep"></div>
+  <label>Fail link:
+    <select id="cfg-fail-link"></select>
+  </label>
+  <label>Failure:
+    <select id="cfg-fail-type">
+      <option value="silent">Silent (data-plane)</option>
+      <option value="carrier">Carrier loss (fibre cut)</option>
+    </select>
+  </label>
+  <div class="sep"></div>
+  <label>BFD:
+    <select id="cfg-bfd">
+      <option value="1">1 ms</option>
+      <option value="5" selected>5 ms</option>
+      <option value="15">15 ms</option>
+    </select>
+  </label>
+  <label>Ctrl dist:
+    <select id="cfg-cdist">
+      <option value="5">5 ms</option>
+      <option value="10" selected>10 ms</option>
+      <option value="25">25 ms</option>
+      <option value="50">50 ms</option>
+    </select>
+  </label>
+  <div class="sep"></div>
+  <button class="btn btn-primary" id="btn-run">&#9654; Run</button>
+  <button class="btn" id="btn-reset">&#8635; Reset</button>
+</div>
+
+<div class="grid" id="grid">
+  <div class="panel" id="p-restoration">
+    <div class="panel-header">
+      <div class="panel-title"><span class="icon" style="background:#e8a020"></span> Restoration</div>
+      <div class="panel-phase" id="phase-restoration">idle</div>
+    </div>
+    <div class="panel-canvas-wrap"><canvas id="cv-restoration"></canvas></div>
+    <div class="progress-bar"><div class="progress-fill" id="prog-restoration" style="background:#cc8800"></div></div>
+    <div class="panel-results" id="res-restoration"></div>
+  </div>
+  <div class="panel" id="p-protection-los">
+    <div class="panel-header">
+      <div class="panel-title"><span class="icon" style="background:#4488cc"></span> Protection (LoS)</div>
+      <div class="panel-phase" id="phase-protection-los">idle</div>
+    </div>
+    <div class="panel-canvas-wrap"><canvas id="cv-protection-los"></canvas></div>
+    <div class="progress-bar"><div class="progress-fill" id="prog-protection-los" style="background:#2860a8"></div></div>
+    <div class="panel-results" id="res-protection-los"></div>
+  </div>
+  <div class="panel" id="p-protection-bfd">
+    <div class="panel-header">
+      <div class="panel-title"><span class="icon" style="background:#7a4abf"></span> Protection + BFD</div>
+      <div class="panel-phase" id="phase-protection-bfd">idle</div>
+    </div>
+    <div class="panel-canvas-wrap"><canvas id="cv-protection-bfd"></canvas></div>
+    <div class="progress-bar"><div class="progress-fill" id="prog-protection-bfd" style="background:#6a3aaa"></div></div>
+    <div class="panel-results" id="res-protection-bfd"></div>
+  </div>
+  <div class="panel" id="p-hybrid">
+    <div class="panel-header">
+      <div class="panel-title"><span class="icon" style="background:#1a9a8a"></span> Hybrid (BFD + Re-opt)</div>
+      <div class="panel-phase" id="phase-hybrid">idle</div>
+    </div>
+    <div class="panel-canvas-wrap"><canvas id="cv-hybrid"></canvas></div>
+    <div class="progress-bar"><div class="progress-fill" id="prog-hybrid" style="background:#0a7a6a"></div></div>
+    <div class="panel-results" id="res-hybrid"></div>
+  </div>
+</div>
+
+<div class="console" id="console">
+  <div class="line"><span class="prompt">mininet&gt;</span> <span class="info">SDN Recovery Simulator initialized</span></div>
+</div>
+
+<div class="status-bar">
+  <span class="legend"><span class="lc" style="background:#2860a8"></span> Primary</span>
+  <span class="legend"><span class="lc" style="background:#1a8a1a"></span> Backup</span>
+  <span class="legend"><span class="lc" style="background:#cc2222;border-top:1px dashed #cc2222"></span> Failed</span>
+  <span class="legend"><span class="lc" style="background:#cc8800"></span> Controller</span>
+  <span style="flex:1"></span>
+  <span>Packets shown as dots | Time scaled for visibility</span>
+</div>
+
+<script>
+/* ============================================================
+   CONSOLE LOGGER
+   ============================================================ */
+function clog(msg, cls) {
+  cls = cls || 'info';
+  const con = document.getElementById('console');
+  const d = document.createElement('div');
+  d.className = 'line';
+  d.innerHTML = '<span class="prompt">mininet&gt;</span> <span class="' + cls + '">' + msg + '</span>';
+  con.appendChild(d);
+  con.scrollTop = con.scrollHeight;
+}
+
+/* ============================================================
+   GRAPH & ROUTING
+   ============================================================ */
+function canonEdge(a, b) {
+  return a < b ? a + '-' + b : b + '-' + a;
+}
+
+class Graph {
+  constructor() {
+    this.nodes = {};
+    this.edges = [];
+    this.adj = {};
+  }
+  addNode(id, x, y, label) {
+    this.nodes[id] = { id, x, y, label: label || id };
+    if (!this.adj[id]) this.adj[id] = [];
+  }
+  addEdge(a, b, w = 1) {
+    this.edges.push({ from: a, to: b, weight: w, id: canonEdge(a, b) });
+    this.adj[a] = this.adj[a] || [];
+    this.adj[b] = this.adj[b] || [];
+    this.adj[a].push({ to: b, w });
+    this.adj[b].push({ to: a, w });
+  }
+  neighbors(n) { return (this.adj[n] || []).map(e => e.to); }
+
+  dijkstra(src, removed) {
+    removed = removed || new Set();
+    const dist = {}, prev = {}, visited = new Set();
+    const pq = [];
+    for (const id in this.nodes) dist[id] = Infinity;
+    dist[src] = 0;
+    pq.push([0, src]);
+    while (pq.length) {
+      pq.sort((a, b) => a[0] - b[0]);
+      const [d, u] = pq.shift();
+      if (visited.has(u)) continue;
+      visited.add(u);
+      for (const e of (this.adj[u] || [])) {
+        if (removed.has(canonEdge(u, e.to))) continue;
+        const nd = d + e.w;
+        if (nd < dist[e.to]) {
+          dist[e.to] = nd;
+          prev[e.to] = u;
+          pq.push([nd, e.to]);
+        }
+      }
+    }
+    return { dist, prev };
+  }
+
+  shortestPath(src, dst, removed) {
+    const { prev } = this.dijkstra(src, removed);
+    if (prev[dst] === undefined && src !== dst) return null;
+    const p = [];
+    let c = dst;
+    while (c !== undefined) { p.unshift(c); c = prev[c]; }
+    return p[0] === src ? p : null;
+  }
+
+  allLinks() {
+    const seen = new Set();
+    return this.edges.filter(e => {
+      const k = e.id;
+      if (seen.has(k)) return false;
+      seen.add(k);
+      return true;
+    });
+  }
+
+  clone() {
+    const g = new Graph();
+    for (const id in this.nodes) {
+      const n = this.nodes[id];
+      g.addNode(id, n.x, n.y, n.label);
+    }
+    const seen = new Set();
+    for (const e of this.edges) {
+      if (!seen.has(e.id)) { g.addEdge(e.from, e.to, e.weight); seen.add(e.id); }
+    }
+    return g;
+  }
+}
+
+/* ============================================================
+   TOPOLOGY GENERATORS
+   ============================================================ */
+function generateRing(n) {
+  const g = new Graph();
+  for (let i = 0; i < n; i++) {
+    const a = (2 * Math.PI * i / n) - Math.PI / 2;
+    const x = 0.5 + 0.36 * Math.cos(a);
+    const y = 0.5 + 0.36 * Math.sin(a);
+    g.addNode('s' + (i + 1), x, y, String.fromCharCode(65 + (i % 26)));
+  }
+  for (let i = 0; i < n; i++) {
+    const w = (i === n - 1) ? 10 : 1;
+    g.addEdge('s' + (i + 1), 's' + ((i + 1) % n + 1), w);
+  }
+  return g;
+}
+
+function generateTriangle() {
+  const g = new Graph();
+  g.addNode('s1', 0.5, 0.18, 'A');
+  g.addNode('s2', 0.22, 0.78, 'B');
+  g.addNode('s3', 0.78, 0.78, 'C');
+  g.addEdge('s1', 's2', 1);
+  g.addEdge('s2', 's3', 1);
+  g.addEdge('s1', 's3', 3);
+  return g;
+}
+
+function generateGrid(n) {
+  const cols = Math.ceil(Math.sqrt(n));
+  const rows = Math.ceil(n / cols);
+  const g = new Graph();
+  let idx = 0;
+  for (let r = 0; r < rows && idx < n; r++) {
+    for (let c = 0; c < cols && idx < n; c++) {
+      const x = 0.15 + (c / Math.max(cols - 1, 1)) * 0.7;
+      const y = 0.15 + (r / Math.max(rows - 1, 1)) * 0.7;
+      g.addNode('s' + (idx + 1), x, y, String.fromCharCode(65 + (idx % 26)));
+      if (c > 0) g.addEdge('s' + idx, 's' + (idx + 1), 1);
+      if (r > 0 && idx - cols >= 0) g.addEdge('s' + (idx - cols + 1), 's' + (idx + 1), 1);
+      idx++;
+    }
+  }
+  return g;
+}
+
+function buildTopology(type, n) {
+  if (type === 'triangle') return generateTriangle();
+  if (type === 'grid') return generateGrid(n);
+  return generateRing(n);
+}
+
+/* ============================================================
+   RECOVERY SIMULATION (timing model)
+   ============================================================ */
+const BFD_M = 3;
+const FF_SWITCH_MS = 2.0;
+const CARRIER_DETECT_MS = 0.8;
+const RESTORE_FIXED_MS = 4.5;
+
+function simRecovery(graph, src, dst, failLink, method, failType, bfdMs, cDistMs) {
+  const primary = graph.shortestPath(src, dst);
+  if (!primary) return { method, recovered: false, phases: [], primary: null, newPath: null, recoveryTime: null };
+
+  const removed = new Set([canonEdge(failLink[0], failLink[1])]);
+  const backup = graph.shortestPath(src, dst, removed);
+
+  const phases = [];
+  let recoveryMs = 0;
+  let recovered = false;
+  let newPath = null;
+  let reoptPath = null;
+  let reoptMs = null;
+
+  if (method === 'restoration') {
+    let detectMs;
+    if (failType === 'carrier') {
+      detectMs = CARRIER_DETECT_MS;
+      phases.push({ name: 'Carrier loss detected', t: detectMs });
+    } else {
+      detectMs = (BFD_M - 0.5) * bfdMs + 0.5;
+      phases.push({ name: 'BFD detecting...', t: detectMs });
+    }
+    const notifyMs = detectMs + cDistMs;
+    phases.push({ name: 'Notifying controller', t: notifyMs });
+    const computeMs = notifyMs + RESTORE_FIXED_MS;
+    phases.push({ name: 'Computing new path', t: computeMs });
+    const installMs = computeMs + cDistMs;
+    phases.push({ name: 'Installing rules', t: installMs });
+    recoveryMs = installMs;
+    newPath = backup;
+    recovered = newPath !== null;
+    if (!recovered) recoveryMs = null;
+  }
+
+  else if (method === 'protection-los') {
+    if (failType === 'carrier') {
+      const detectMs = CARRIER_DETECT_MS;
+      phases.push({ name: 'Carrier loss detected', t: detectMs });
+      recoveryMs = detectMs + FF_SWITCH_MS;
+      phases.push({ name: 'Fast-failover switch', t: recoveryMs });
+      newPath = backup;
+      recovered = newPath !== null;
+    } else {
+      phases.push({ name: 'No carrier change...', t: 1 });
+      phases.push({ name: 'Packets dropping', t: 3 });
+      recovered = false;
+      recoveryMs = null;
+    }
+  }
+
+  else if (method === 'protection-bfd') {
+    const detectMs = (BFD_M - 0.5) * bfdMs + 0.5;
+    phases.push({ name: 'BFD probing...', t: detectMs * 0.3 });
+    phases.push({ name: 'BFD: link dead!', t: detectMs });
+    recoveryMs = detectMs + FF_SWITCH_MS;
+    phases.push({ name: 'Fast-failover switch', t: recoveryMs });
+    newPath = backup;
+    recovered = newPath !== null;
+    if (!recovered) recoveryMs = null;
+  }
+
+  else if (method === 'hybrid') {
+    const detectMs = (BFD_M - 0.5) * bfdMs + 0.5;
+    phases.push({ name: 'BFD probing...', t: detectMs * 0.3 });
+    phases.push({ name: 'BFD: link dead!', t: detectMs });
+    recoveryMs = detectMs + FF_SWITCH_MS;
+    phases.push({ name: 'Fast-failover switch', t: recoveryMs });
+    newPath = backup;
+    recovered = newPath !== null;
+    reoptMs = detectMs + cDistMs + RESTORE_FIXED_MS + cDistMs + 1.5;
+    reoptPath = backup;
+    phases.push({ name: 'Controller re-optimizing...', t: detectMs + cDistMs + RESTORE_FIXED_MS });
+    phases.push({ name: 'Optimal path installed', t: reoptMs });
+  }
+
+  let failReason = null;
+  if (!recovered) {
+    if (method === 'protection-los' && failType === 'silent') failReason = 'Data-plane failure — no carrier change for LoS to detect';
+    else if (!backup) failReason = 'No backup path available';
+    else failReason = 'Recovery failed';
+  }
+
+  return {
+    method, primary, newPath, reoptPath, recovered, recoveryMs, reoptMs,
+    phases, failLink, failType, bfdMs, cDistMs, failReason
+  };
+}
+
+/* ============================================================
+   DRAWING HELPERS — Mininet-style switch/host/controller icons
+   ============================================================ */
+const SW_W = 28, SW_H = 20;
+
+function drawSwitch(ctx, x, y, label, fillColor, strokeColor) {
+  ctx.fillStyle = fillColor;
+  ctx.strokeStyle = strokeColor;
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.roundRect(x - SW_W/2, y - SW_H/2, SW_W, SW_H, 3);
+  ctx.fill();
+  ctx.stroke();
+
+  // Port dots on left and right
+  ctx.fillStyle = strokeColor;
+  for (let i = -1; i <= 1; i++) {
+    ctx.beginPath();
+    ctx.arc(x - SW_W/2 + 2, y + i * 5, 1.5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(x + SW_W/2 - 2, y + i * 5, 1.5, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // Label below
+  ctx.fillStyle = '#1a1a1a';
+  ctx.font = 'bold 10px "Courier New", monospace';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'top';
+  ctx.fillText(label, x, y + SW_H/2 + 3);
+}
+
+function drawController(ctx, x, y) {
+  // Outer glow ring
+  ctx.beginPath();
+  ctx.arc(x, y, 20, 0, Math.PI * 2);
+  ctx.fillStyle = 'rgba(221, 170, 34, 0.15)';
+  ctx.fill();
+
+  // Main body — large circle
+  ctx.beginPath();
+  ctx.arc(x, y, 15, 0, Math.PI * 2);
+  ctx.fillStyle = '#f0c030';
+  ctx.fill();
+  ctx.strokeStyle = '#aa7700';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+
+  // Antenna / broadcast rays
+  ctx.strokeStyle = '#aa7700';
+  ctx.lineWidth = 1.5;
+  // Vertical antenna
+  ctx.beginPath();
+  ctx.moveTo(x, y - 15);
+  ctx.lineTo(x, y - 23);
+  ctx.stroke();
+  // Antenna tip
+  ctx.beginPath();
+  ctx.arc(x, y - 24, 2, 0, Math.PI * 2);
+  ctx.fillStyle = '#cc2222';
+  ctx.fill();
+  // Signal arcs (left)
+  ctx.strokeStyle = 'rgba(170, 119, 0, 0.5)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.arc(x, y - 23, 6, 0.8 * Math.PI, 1.2 * Math.PI);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.arc(x, y - 23, 10, 0.85 * Math.PI, 1.15 * Math.PI);
+  ctx.stroke();
+  // Signal arcs (right)
+  ctx.beginPath();
+  ctx.arc(x, y - 23, 6, -0.2 * Math.PI, 0.2 * Math.PI);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.arc(x, y - 23, 10, -0.15 * Math.PI, 0.15 * Math.PI);
+  ctx.stroke();
+
+  // Label inside
+  ctx.fillStyle = '#1a1a1a';
+  ctx.font = 'bold 10px "Courier New", monospace';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('c0', x, y);
+
+  // Label below
+  ctx.fillStyle = '#666';
+  ctx.font = '9px "Courier New", monospace';
+  ctx.textBaseline = 'top';
+  ctx.fillText('controller', x, y + 17);
+}
+
+function drawHost(ctx, x, y, label) {
+  ctx.fillStyle = '#cc4444';
+  ctx.strokeStyle = '#992222';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.arc(x, y, 10, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+  ctx.fillStyle = '#fff';
+  ctx.font = 'bold 9px "Courier New", monospace';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(label, x, y);
+}
+
+/* ============================================================
+   ANIMATION ENGINE
+   ============================================================ */
+const TIME_SCALE = 120;
+const PRE_FAIL_S = 2.5;
+const POST_DONE_S = 2.0;
+const PARTICLE_SPEED = 0.8;
+
+class Panel {
+  constructor(canvasId, method, phaseId, progId, resId, methodColor) {
+    this.canvas = document.getElementById(canvasId);
+    this.ctx = this.canvas.getContext('2d');
+    this.method = method;
+    this.phaseEl = document.getElementById(phaseId);
+    this.progEl = document.getElementById(progId);
+    this.resEl = document.getElementById(resId);
+    this.methodColor = methodColor;
+    this.graph = null;
+    this.sim = null;
+    this.time = 0;
+    this.totalTime = 10;
+    this.state = 'idle';
+    this.particles = [];
+    this.failTime = 0;
+    this.dpr = window.devicePixelRatio || 1;
+  }
+
+  resize() {
+    const rect = this.canvas.parentElement.getBoundingClientRect();
+    this.w = rect.width;
+    this.h = rect.height;
+    this.canvas.width = this.w * this.dpr;
+    this.canvas.height = this.h * this.dpr;
+    this.canvas.style.width = this.w + 'px';
+    this.canvas.style.height = this.h + 'px';
+    this.ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+  }
+
+  setup(graph, sim) {
+    this.graph = graph;
+    this.sim = sim;
+    this.time = 0;
+    this.state = 'pre';
+    this.failTime = PRE_FAIL_S;
+    const maxPhase = sim.phases.length ? Math.max(...sim.phases.map(p => p.t)) : 0;
+    const animRecover = maxPhase * TIME_SCALE / 1000;
+    this.totalTime = PRE_FAIL_S + animRecover + POST_DONE_S + 1;
+    this.particles = [];
+    for (let i = 0; i < 6; i++) {
+      this.particles.push({ progress: i / 6, active: true, path: sim.primary, dropped: false });
+    }
+    this.resEl.classList.remove('visible');
+    this.resEl.innerHTML = '';
+    this.setPhase('ready', '');
+  }
+
+  setPhase(txt, cls) {
+    this.phaseEl.textContent = txt;
+    this.phaseEl.className = 'panel-phase' + (cls ? ' ' + cls : '');
+  }
+
+  currentPhase() {
+    if (!this.sim || this.state === 'pre') return null;
+    const elapsed = (this.time - this.failTime) * 1000 / TIME_SCALE;
+    let last = null;
+    for (const p of this.sim.phases) {
+      if (elapsed >= p.t) last = p;
+    }
+    return last;
+  }
+
+  isRecovered() {
+    if (!this.sim || !this.sim.recovered) return false;
+    const elapsed = (this.time - this.failTime) * 1000 / TIME_SCALE;
+    return elapsed >= this.sim.recoveryMs;
+  }
+
+  isReoptimized() {
+    if (!this.sim || !this.sim.reoptMs) return false;
+    const elapsed = (this.time - this.failTime) * 1000 / TIME_SCALE;
+    return elapsed >= this.sim.reoptMs;
+  }
+
+  activePath() {
+    if (this.state === 'pre') return this.sim.primary;
+    if (!this.sim.recovered) return null;
+    if (this.isRecovered()) {
+      if (this.sim.reoptPath && this.isReoptimized()) return this.sim.reoptPath;
+      return this.sim.newPath;
+    }
+    return null;
+  }
+
+  update(dt) {
+    if (this.state === 'idle') return;
+    this.time += dt;
+
+    if (this.state === 'pre' && this.time >= this.failTime) {
+      this.state = 'failing';
+      this.setPhase('*** LINK DOWN ***', 'active');
+    }
+
+    if (this.state === 'failing') {
+      const p = this.currentPhase();
+      if (p) this.setPhase(p.name, 'active');
+      if (this.sim.recovered && this.isRecovered()) {
+        this.state = 'recovered';
+        this.setPhase('RECOVERED', 'done');
+        for (const pt of this.particles) {
+          pt.path = this.sim.newPath;
+          pt.dropped = false;
+          pt.active = true;
+        }
+      } else if (!this.sim.recovered) {
+        const elapsed = (this.time - this.failTime) * 1000 / TIME_SCALE;
+        if (elapsed > (this.sim.phases.length ? this.sim.phases[this.sim.phases.length - 1].t + 5 : 5)) {
+          this.state = 'failed';
+          this.setPhase('FAILED', 'fail');
+        }
+      }
+    }
+
+    if (this.state === 'recovered' && this.sim.reoptPath && this.isReoptimized()) {
+      this.setPhase('RE-OPTIMIZED', 'done');
+      for (const pt of this.particles) {
+        pt.path = this.sim.reoptPath;
+      }
+    }
+
+    if ((this.state === 'recovered' || this.state === 'failed') && !this._resultShown) {
+      const afterRecovery = this.time - this.failTime - (this.sim.recoveryMs || 0) * TIME_SCALE / 1000;
+      if (afterRecovery > 1.2 || this.state === 'failed') {
+        this.showResult();
+        this._resultShown = true;
+      }
+    }
+
+    const curPath = this.activePath();
+    const failId = this.sim ? canonEdge(this.sim.failLink[0], this.sim.failLink[1]) : null;
+    for (const pt of this.particles) {
+      if (!pt.active || !pt.path) continue;
+      pt.progress += dt * PARTICLE_SPEED / Math.max(pt.path.length - 1, 1);
+      if (pt.progress >= 1) pt.progress -= 1;
+      if (this.state === 'failing' && !this.isRecovered()) {
+        const seg = Math.floor(pt.progress * (pt.path.length - 1));
+        const a = pt.path[seg], b = pt.path[Math.min(seg + 1, pt.path.length - 1)];
+        if (canonEdge(a, b) === failId) {
+          pt.dropped = true;
+        }
+      }
+      if (this.state === 'recovered' || this.state === 'pre') {
+        pt.dropped = false;
+      }
+    }
+
+    const pct = Math.min(100, (this.time / this.totalTime) * 100);
+    this.progEl.style.width = pct + '%';
+  }
+
+  showResult() {
+    const s = this.sim;
+    let html = '';
+    if (s.recovered) {
+      html += '<div class="result-big" style="color:' + this.methodColor + '">' + s.recoveryMs.toFixed(1) + ' ms</div>';
+      html += '<div class="result-row"><span class="rk">Status</span><span class="rv good">Recovered</span></div>';
+      html += '<div class="result-row"><span class="rk">Recovery</span><span class="rv">' + s.recoveryMs.toFixed(1) + ' ms</span></div>';
+      if (s.newPath) {
+        const labels = s.newPath.map(n => this.graph.nodes[n].label).join(' &rarr; ');
+        html += '<div class="result-row"><span class="rk">Path</span><span class="rv" style="font-size:10px">' + labels + '</span></div>';
+      }
+      if (s.reoptMs) {
+        html += '<div class="result-row"><span class="rk">Re-opt</span><span class="rv">' + s.reoptMs.toFixed(1) + ' ms</span></div>';
+      }
+      clog(this.method + ': recovered in ' + s.recoveryMs.toFixed(1) + 'ms, path ' +
+        s.newPath.map(n => this.graph.nodes[n].label).join('->'));
+    } else {
+      html += '<div class="result-big" style="color:#cc2222">FAILED</div>';
+      html += '<div class="result-row"><span class="rk">Status</span><span class="rv bad">No recovery</span></div>';
+      html += '<div class="result-row"><span class="rk">Reason</span><span class="rv" style="font-size:10px">' + s.failReason + '</span></div>';
+      clog(this.method + ': FAILED — ' + s.failReason, 'err');
+    }
+    this.resEl.innerHTML = html;
+    requestAnimationFrame(() => this.resEl.classList.add('visible'));
+  }
+
+  draw() {
+    const ctx = this.ctx;
+    const W = this.w, H = this.h;
+
+    // White canvas background
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, W, H);
+
+    // Grid dots (like MiniEdit canvas)
+    ctx.fillStyle = '#e0e0e0';
+    for (let gx = 20; gx < W; gx += 20) {
+      for (let gy = 20; gy < H; gy += 20) {
+        ctx.fillRect(gx, gy, 1, 1);
+      }
+    }
+
+    if (!this.graph) {
+      ctx.fillStyle = '#888';
+      ctx.font = '12px "Courier New", monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText('Select topology and click Run', W / 2, H / 2);
+      return;
+    }
+
+    const pad = 36;
+    const gw = W - pad * 2, gh = H - pad * 2 - 14;
+    const tx = n => pad + this.graph.nodes[n].x * gw;
+    const ty = n => pad + this.graph.nodes[n].y * gh;
+
+    // Idle mode: draw topology without simulation data
+    if (!this.sim) {
+      for (const e of this.graph.allLinks()) {
+        const x1 = tx(e.from), y1 = ty(e.from), x2 = tx(e.to), y2 = ty(e.to);
+        ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2);
+        ctx.strokeStyle = '#999'; ctx.lineWidth = 1; ctx.stroke();
+      }
+      const nodeIds = Object.keys(this.graph.nodes);
+      for (const id in this.graph.nodes) {
+        const n = this.graph.nodes[id];
+        const x = tx(id), y = ty(id);
+        if (id === nodeIds[0] || id === nodeIds[nodeIds.length - 1]) {
+          drawHost(ctx, x, y, n.label);
+        } else {
+          drawSwitch(ctx, x, y, n.label, '#88aacc', '#6688aa');
+        }
+      }
+      return;
+    }
+
+    const failId = canonEdge(this.sim.failLink[0], this.sim.failLink[1]);
+    const primaryEdges = new Set();
+    if (this.sim.primary) {
+      for (let i = 0; i < this.sim.primary.length - 1; i++) {
+        primaryEdges.add(canonEdge(this.sim.primary[i], this.sim.primary[i + 1]));
+      }
+    }
+    const newEdges = new Set();
+    const curPath = this.activePath();
+    if (curPath && this.state !== 'pre') {
+      for (let i = 0; i < curPath.length - 1; i++) {
+        newEdges.add(canonEdge(curPath[i], curPath[i + 1]));
+      }
+    }
+
+    const isFailing = this.state === 'failing' || this.state === 'recovered' || this.state === 'failed';
+
+    // Draw edges
+    for (const e of this.graph.allLinks()) {
+      const x1 = tx(e.from), y1 = ty(e.from), x2 = tx(e.to), y2 = ty(e.to);
+      ctx.beginPath();
+      ctx.moveTo(x1, y1);
+      ctx.lineTo(x2, y2);
+
+      if (isFailing && e.id === failId) {
+        ctx.strokeStyle = '#cc2222';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([5, 3]);
+      } else if (isFailing && newEdges.has(e.id)) {
+        ctx.strokeStyle = '#1a8a1a';
+        ctx.lineWidth = 2.5;
+        ctx.setLineDash([]);
+      } else if (primaryEdges.has(e.id) && !isFailing) {
+        ctx.strokeStyle = '#2860a8';
+        ctx.lineWidth = 2.5;
+        ctx.setLineDash([]);
+      } else {
+        ctx.strokeStyle = '#999';
+        ctx.lineWidth = 1;
+        ctx.setLineDash([]);
+      }
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+
+    // X mark on failed link
+    if (isFailing) {
+      const fl = this.sim.failLink;
+      const mx = (tx(fl[0]) + tx(fl[1])) / 2;
+      const my = (ty(fl[0]) + ty(fl[1])) / 2;
+      ctx.strokeStyle = '#cc2222';
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.moveTo(mx - 7, my - 7); ctx.lineTo(mx + 7, my + 7);
+      ctx.moveTo(mx + 7, my - 7); ctx.lineTo(mx - 7, my + 7);
+      ctx.stroke();
+    }
+
+    // BFD probes
+    if ((this.method === 'protection-bfd' || this.method === 'hybrid') && this.state === 'failing' && !this.isRecovered()) {
+      const elapsed = (this.time - this.failTime);
+      const probePhase = (elapsed * 4) % 1;
+      for (const e of this.graph.allLinks()) {
+        if (e.id === failId) continue;
+        const x1 = tx(e.from), y1 = ty(e.from), x2 = tx(e.to), y2 = ty(e.to);
+        const px = x1 + (x2 - x1) * probePhase;
+        const py = y1 + (y2 - y1) * probePhase;
+        ctx.beginPath();
+        ctx.arc(px, py, 2, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(106, 58, 170, 0.6)';
+        ctx.fill();
+      }
+    }
+
+    // Controller (for restoration/hybrid)
+    if ((this.method === 'restoration' || this.method === 'hybrid') && isFailing) {
+      const elapsed = (this.time - this.failTime) * 1000 / TIME_SCALE;
+      const detectMs = this.sim.phases[0] ? this.sim.phases[0].t : 0;
+      if (elapsed > detectMs && (!this.sim.recovered || !this.isRecovered() || this.method === 'hybrid')) {
+        const ctrlX = W - 40, ctrlY = 24;
+        drawController(ctx, ctrlX, ctrlY);
+        const failNode = this.sim.failLink[0];
+        const fnx = tx(failNode), fny = ty(failNode);
+        ctx.beginPath();
+        ctx.setLineDash([3, 3]);
+        ctx.strokeStyle = 'rgba(204, 136, 0, 0.6)';
+        ctx.lineWidth = 1;
+        ctx.moveTo(fnx, fny);
+        ctx.lineTo(ctrlX, ctrlY + 13);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        const msgProg = ((elapsed - detectMs) / (this.sim.cDistMs * 2 + RESTORE_FIXED_MS)) % 1;
+        const msgX = fnx + (ctrlX - fnx) * Math.min(msgProg * 2, 1);
+        const msgY = fny + (ctrlY + 13 - fny) * Math.min(msgProg * 2, 1);
+        ctx.beginPath();
+        ctx.arc(msgX, msgY, 3, 0, Math.PI * 2);
+        ctx.fillStyle = '#cc8800';
+        ctx.fill();
+      }
+    }
+
+    // Draw switch nodes (Mininet style)
+    const nodeIds = Object.keys(this.graph.nodes);
+    const srcId = nodeIds[0], dstId = nodeIds[nodeIds.length - 1];
+    for (const id in this.graph.nodes) {
+      const n = this.graph.nodes[id];
+      const x = tx(id), y = ty(id);
+      const isOnPrimary = this.sim.primary && this.sim.primary.includes(id);
+      const isOnNew = curPath && curPath.includes(id) && this.state !== 'pre';
+
+      if (id === srcId || id === dstId) {
+        // Source and destination as host icons
+        drawHost(ctx, x, y, n.label);
+      } else {
+        // Intermediate nodes as switch icons
+        let fill, stroke;
+        if (isOnNew && isFailing) {
+          fill = '#2a9a2a'; stroke = '#1a7a1a';
+        } else if (isOnPrimary && !isFailing) {
+          fill = '#4488cc'; stroke = '#2860a8';
+        } else {
+          fill = '#88aacc'; stroke = '#6688aa';
+        }
+        drawSwitch(ctx, x, y, n.label, fill, stroke);
+      }
+    }
+
+    // Draw packets
+    for (const pt of this.particles) {
+      if (!pt.active || !pt.path || pt.path.length < 2) continue;
+      const seg = Math.floor(pt.progress * (pt.path.length - 1));
+      const frac = (pt.progress * (pt.path.length - 1)) - seg;
+      const a = pt.path[seg], b = pt.path[Math.min(seg + 1, pt.path.length - 1)];
+      const x = tx(a) + (tx(b) - tx(a)) * frac;
+      const y = ty(a) + (ty(b) - ty(a)) * frac;
+
+      if (pt.dropped) {
+        ctx.strokeStyle = '#cc2222';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(x - 3, y - 3); ctx.lineTo(x + 3, y + 3);
+        ctx.moveTo(x + 3, y - 3); ctx.lineTo(x - 3, y + 3);
+        ctx.stroke();
+      } else {
+        // Packet as small filled square (Mininet style)
+        ctx.fillStyle = '#2860a8';
+        ctx.fillRect(x - 3, y - 3, 6, 6);
+        ctx.strokeStyle = '#1a4a88';
+        ctx.lineWidth = 0.5;
+        ctx.strokeRect(x - 3, y - 3, 6, 6);
+      }
+    }
+  }
+
+  reset() {
+    this.state = 'idle';
+    this.time = 0;
+    this.sim = null;
+    this.particles = [];
+    this._resultShown = false;
+    this.setPhase('idle', '');
+    this.progEl.style.width = '0%';
+    this.resEl.classList.remove('visible');
+    this.resEl.innerHTML = '';
+    this.resize();
+    this.draw();
+  }
+}
+
+/* ============================================================
+   APP CONTROLLER
+   ============================================================ */
+const panels = [
+  new Panel('cv-restoration', 'restoration', 'phase-restoration', 'prog-restoration', 'res-restoration', '#cc8800'),
+  new Panel('cv-protection-los', 'protection-los', 'phase-protection-los', 'prog-protection-los', 'res-protection-los', '#2860a8'),
+  new Panel('cv-protection-bfd', 'protection-bfd', 'phase-protection-bfd', 'prog-protection-bfd', 'res-protection-bfd', '#6a3aaa'),
+  new Panel('cv-hybrid', 'hybrid', 'phase-hybrid', 'prog-hybrid', 'res-hybrid', '#0a7a6a'),
+];
+
+let currentGraph = null;
+let running = false;
+let animId = null;
+
+function populateLinks() {
+  const sel = document.getElementById('cfg-fail-link');
+  sel.innerHTML = '';
+  if (!currentGraph) return;
+  const nodeIds = Object.keys(currentGraph.nodes);
+  const src = nodeIds[0], dst = nodeIds[nodeIds.length - 1];
+  const primary = currentGraph.shortestPath(src, dst);
+  const primaryEdges = new Set();
+  if (primary) {
+    for (let i = 0; i < primary.length - 1; i++)
+      primaryEdges.add(canonEdge(primary[i], primary[i + 1]));
+  }
+  const links = currentGraph.allLinks();
+  let firstPrimary = null;
+  links.forEach(e => {
+    const a = currentGraph.nodes[e.from].label;
+    const b = currentGraph.nodes[e.to].label;
+    const onPath = primaryEdges.has(e.id);
+    const opt = document.createElement('option');
+    opt.value = e.from + '|' + e.to;
+    opt.textContent = a + ' — ' + b + (onPath ? '  (on primary)' : '');
+    sel.appendChild(opt);
+    if (onPath && !firstPrimary) firstPrimary = opt;
+  });
+  if (firstPrimary) firstPrimary.selected = true;
+}
+
+function rebuildTopology() {
+  const type = document.getElementById('cfg-topo').value;
+  let n = parseInt(document.getElementById('cfg-switches').value) || 5;
+  if (type === 'triangle') n = 3;
+  else if (type === 'grid' && n < 4) n = 4;
+  document.getElementById('cfg-switches').value = type === 'triangle' ? 3 : n;
+  currentGraph = buildTopology(type, n);
+  populateLinks();
+
+  panels.forEach(p => {
+    p.graph = currentGraph;
+    p.sim = null;
+    p.state = 'idle';
+    p.resize();
+    p.draw();
+  });
+}
+
+function startSimulation() {
+  if (running) return;
+  const failVal = document.getElementById('cfg-fail-link').value;
+  if (!failVal) return;
+  const [fa, fb] = failVal.split('|');
+  const failType = document.getElementById('cfg-fail-type').value;
+  const bfdMs = parseInt(document.getElementById('cfg-bfd').value);
+  const cDistMs = parseInt(document.getElementById('cfg-cdist').value);
+
+  const nodeIds = Object.keys(currentGraph.nodes);
+  const src = nodeIds[0];
+  const dst = nodeIds[nodeIds.length - 1];
+
+  const topoName = document.getElementById('cfg-topo').value;
+  clog('net.start() — topology=' + topoName + ', switches=' + Object.keys(currentGraph.nodes).length +
+    ', fail=' + currentGraph.nodes[fa].label + '-' + currentGraph.nodes[fb].label +
+    ', type=' + failType);
+
+  const methods = ['restoration', 'protection-los', 'protection-bfd', 'hybrid'];
+  methods.forEach((m, i) => {
+    const sim = simRecovery(currentGraph, src, dst, [fa, fb], m, failType, bfdMs, cDistMs);
+    panels[i].resize();
+    panels[i]._resultShown = false;
+    panels[i].setup(currentGraph, sim);
+  });
+
+  running = true;
+  document.getElementById('btn-run').disabled = true;
+  clog('Injecting link failure...');
+
+  let lastTime = performance.now();
+  const FPS = 60;
+
+  function tick() {
+    const now = performance.now();
+    const dt = Math.min((now - lastTime) / 1000, 0.1);
+    lastTime = now;
+    let allDone = true;
+    panels.forEach(p => {
+      if (p.w === 0 || p.h === 0) p.resize();
+      p.update(dt);
+      p.draw();
+      if (p.time < p.totalTime) allDone = false;
+    });
+    if (allDone) {
+      clearInterval(animId);
+      animId = null;
+      running = false;
+      document.getElementById('btn-run').disabled = false;
+      clog('Simulation complete.');
+    }
+  }
+  panels.forEach(p => { p.resize(); p.draw(); });
+  animId = setInterval(tick, 1000 / FPS);
+}
+
+function resetAll() {
+  if (animId) clearInterval(animId);
+  animId = null;
+  running = false;
+  document.getElementById('btn-run').disabled = false;
+  panels.forEach(p => p.reset());
+  rebuildTopology();
+  clog('Reset.');
+}
+
+// Event listeners
+document.getElementById('cfg-topo').addEventListener('change', () => {
+  if (!running) {
+    rebuildTopology();
+    clog('Topology changed to ' + document.getElementById('cfg-topo').value);
+  }
+});
+document.getElementById('cfg-switches').addEventListener('change', () => {
+  if (!running) rebuildTopology();
+});
+document.getElementById('btn-run').addEventListener('click', startSimulation);
+document.getElementById('btn-reset').addEventListener('click', resetAll);
+
+window.addEventListener('resize', () => {
+  panels.forEach(p => { p.resize(); p.draw(); });
+});
+
+// About modal
+document.getElementById('menu-about').addEventListener('click', () => {
+  document.getElementById('modal-overlay').style.display = 'flex';
+});
+document.getElementById('modal-close').addEventListener('click', () => {
+  document.getElementById('modal-overlay').style.display = 'none';
+});
+document.getElementById('modal-overlay').addEventListener('click', (e) => {
+  if (e.target === e.currentTarget) document.getElementById('modal-overlay').style.display = 'none';
+});
+
+// Init
+rebuildTopology();
+panels.forEach(p => { p.resize(); p.draw(); });
+</script>
+</body>
+</html>
