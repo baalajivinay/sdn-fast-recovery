@@ -24,3 +24,9 @@ dist/
 *.vrb
 
 docker/ca-certificates.crt
+
+# Presentation material and generated files (kept locally, not in the repo)
+slides/
+docs/survey.html
+app/media/
+*.spec

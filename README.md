@@ -42,7 +42,7 @@ Measured on Mininet 2.3, Open vSwitch 2.17.5 and os-ken, 325 trials. Controller 
 - BFD at 1 ms is fragile in software OVS: 3 of 20 triangle and ring trials never fired or
   flapped, so medians are quoted there.
 - The first full run exposed a crankback bug: OpenFlow drops a packet sent back out its own
-  ingress port. Crankback buckets now use `OFPP_IN_PORT` (commit `37f26b4`), and every
+  ingress port. Crankback buckets now use `OFPP_IN_PORT` (commit `832626e`), and every
   experiment was re-run. Neither the offline tests nor the simulator caught it.
 
 Full numbers are in [`results/summary.json`](results/summary.json) and the figures in
@@ -94,11 +94,12 @@ leftover loopback delay, and `./run.sh build` builds the local image.
 
 ## Interactive simulator
 
-`app/` holds a self-contained visual model of the four schemes, used for the slide
-illustrations. It is a teaching aid; the numbers above come from the Mininet runs.
+`app/` holds a self-contained visual model of the four schemes. It is a teaching aid; the
+numbers above come from the Mininet runs.
 
-- **Linux executable:** download `SDN_Recovery_Simulator` from the
-  [Releases](../../releases) page, then `chmod +x SDN_Recovery_Simulator && ./SDN_Recovery_Simulator`.
+- **Linux executable:** download `SDN_Recovery_Simulator-linux-x86_64` from the
+  [Releases](../../releases) page, then
+  `chmod +x SDN_Recovery_Simulator-linux-x86_64 && ./SDN_Recovery_Simulator-linux-x86_64`.
 - **From source:** `python3 sdn_app.py` (uses `pywebview` if installed, else your browser),
   or just open `app/index.html`.
 - **Rebuild the executable:** `./build_app.sh` (PyInstaller) → `dist/SDN_Recovery_Simulator`.
@@ -132,11 +133,9 @@ Dockerfile     the replication image (code + pinned environment)
 docker/        entrypoint.sh (command menu), constraints.txt (pinned Python packages)
 results/       summary.json and figures from the measured run
 sim/           simulate.py     model-based placeholder results, same file format
-app/           index.html      interactive simulator; media/ has demo recordings
+app/           index.html      interactive simulator (self-contained HTML/JS)
 sdn_app.py     desktop launcher for the simulator; build_app.sh packages it
-slides/        presentation.tex / .pdf (Beamer), talk_script.txt (10-minute, 4 speakers)
 docs/          REPLICATION.md  paper-to-testbed mapping, deviations, threats to validity
-               survey.html     visual summary of the field and of these results
 ```
 
 ## How recovery is measured
