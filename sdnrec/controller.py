@@ -87,6 +87,8 @@ class RecoveryController(ControllerApp):
         kw = {"eth_type": 0x0800, "ipv4_dst": self.topo.host_ip(m["dst"])}
         if "vlan" in m:
             kw["vlan_vid"] = OFPVID_NONE if m["vlan"] is None else (OFPVID_PRESENT | m["vlan"])
+        if "in_port" in m:
+            kw["in_port"] = m["in_port"]
         return p.OFPMatch(**kw)
 
     def _actions(self, dp, acts):
@@ -95,6 +97,8 @@ class RecoveryController(ControllerApp):
         for a in acts:
             if a[0] == "output":
                 out.append(p.OFPActionOutput(a[1]))
+            elif a[0] == "output_in_port":
+                out.append(p.OFPActionOutput(dp.ofproto.OFPP_IN_PORT))
             elif a[0] == "group":
                 out.append(p.OFPActionGroup(a[1]))
             elif a[0] == "push_vlan":
@@ -226,18 +230,26 @@ class RecoveryController(ControllerApp):
     def reoptimise(self):
         t0 = time.time()
         new_flows, new_groups = state_for("hybrid", self.topo, frozenset(self.failed))
+        new_keys = {flow_key(f) for f in new_flows}
         per_sw = {}
+        # A crankback rule left over from the old state would keep steering
+        # its ingress port onto the old detour, so these must be removed.
+        for k, f in list(self.flow_by_key.items()):
+            if "in_port" in f.match and k not in new_keys:
+                per_sw.setdefault(f.sw, {"detour": [], "primary": [], "groups": [], "stale": []})
+                per_sw[f.sw]["stale"].append(f)
+                del self.flow_by_key[k]
         for f in new_flows:
             old = self.flow_by_key.get(flow_key(f))
             if old is None or old.actions != f.actions:
-                per_sw.setdefault(f.sw, {"detour": [], "primary": [], "groups": []})
+                per_sw.setdefault(f.sw, {"detour": [], "primary": [], "groups": [], "stale": []})
                 kind = "detour" if f.match.get("vlan") is not None else "primary"
                 per_sw[f.sw][kind].append(f)
                 self.flow_by_key[flow_key(f)] = f
         for g in new_groups:
             old = self.group_by_key.get((g.sw, g.gid))
             if old is None or old.buckets != g.buckets:
-                per_sw.setdefault(g.sw, {"detour": [], "primary": [], "groups": []})
+                per_sw.setdefault(g.sw, {"detour": [], "primary": [], "groups": [], "stale": []})
                 per_sw[g.sw]["groups"].append((g, old is None))
                 self.group_by_key[(g.sw, g.gid)] = g
         n = 0
@@ -254,7 +266,12 @@ class RecoveryController(ControllerApp):
                 dp.send_msg(self.group_mod(dp, g, o.OFPGC_ADD if is_new else o.OFPGC_MODIFY))
             for f in todo["primary"]:
                 dp.send_msg(self.flow_mod(dp, f))
-            n += len(todo["detour"]) + len(todo["groups"]) + len(todo["primary"])
+            p = dp.ofproto_parser
+            for f in todo["stale"]:
+                dp.send_msg(p.OFPFlowMod(datapath=dp, command=o.OFPFC_DELETE_STRICT,
+                                         priority=f.priority, match=self._match(dp, f.match),
+                                         out_port=o.OFPP_ANY, out_group=o.OFPG_ANY))
+            n += sum(len(v) for v in todo.values())
         self.event("flows_sent", phase="reopt", n=n, switches=sorted(per_sw),
                    compute_ms=(time.time() - t0) * 1e3)
         for sw in sorted(per_sw):

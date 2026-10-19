@@ -27,7 +27,8 @@ sys.path.insert(0, ROOT)
 
 from sdnrec.of_compat import ofproto_v1_3 as ofp          # noqa: E402
 from sdnrec import topologies as T                        # noqa: E402
-from sdnrec.routing import Flow, Group, forward, path     # noqa: E402
+from sdnrec.routing import Flow, Group, forward, path, protection_state  # noqa: E402
+from sdnrec.controller import flow_key                    # noqa: E402
 
 try:
     from os_ken.ofproto import ofproto_v1_3_parser as parser
@@ -66,7 +67,9 @@ class Tables:
     def _acts(self, actions):
         out, pending_push = [], False
         for a in actions:
-            if isinstance(a, parser.OFPActionOutput):
+            if isinstance(a, parser.OFPActionOutput) and a.port == ofp.OFPP_IN_PORT:
+                out.append(("output_in_port",))
+            elif isinstance(a, parser.OFPActionOutput):
                 out.append(("output", a.port))
             elif isinstance(a, parser.OFPActionGroup):
                 out.append(("group", a.group_id))
@@ -93,8 +96,14 @@ class Tables:
             if "vlan_vid" in m:
                 v = m["vlan_vid"]
                 match["vlan"] = None if v == 0 else v & 0x0fff
-            acts = self._acts(msg.instructions[0].actions)
+            if "in_port" in m:
+                match["in_port"] = m["in_port"]
             key = (sw, msg.priority, tuple(sorted(match.items(), key=str)))
+            if msg.command == ofp.OFPFC_DELETE_STRICT:
+                assert key in self.flows, "DELETE_STRICT of missing flow"
+                del self.flows[key]
+                return
+            acts = self._acts(msg.instructions[0].actions)
             self.flows[key] = Flow(sw, msg.priority, match, acts)
         elif isinstance(msg, parser.OFPGroupMod):
             if msg.command == ofp.OFPGC_DELETE:
@@ -202,6 +211,10 @@ def test_hybrid_ring_reoptimises():
         flush(ctrl, dps, tab)
         assert tab.walk("h1", "h2", cut) == ["s1", "s5"]
         assert "reopt_complete" in events(cfg)
+        # no crankback rule from the pre-failure state survives re-optimisation
+        want = {flow_key(f) for f in protection_state(topo, cut)[0] if "in_port" in f.match}
+        have = {k for k, f in tab.flows.items() if "in_port" in f.match}
+        assert have == want, (have - want, want - have)
 
 
 def test_usnet_all_schemes_every_flow():

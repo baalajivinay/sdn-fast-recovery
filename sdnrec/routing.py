@@ -13,8 +13,9 @@ State model
                      "vlan" -> None  : packet must be untagged
                                int   : packet must carry this VLAN id
                                (key absent: any)
+                     "in_port" -> ingress port number (key absent: any)
         actions:     ("output", port) | ("group", gid) | ("push_vlan", vid)
-                     | ("pop_vlan",)
+                     | ("pop_vlan",) | ("output_in_port",)
     Group(sw, gid, buckets)            fast-failover; bucket = (watch_port, actions)
 
 Schemes
@@ -31,6 +32,10 @@ protection    van Adrichem et al. 2014: every switch on every destination
               crankback (paper Fig. 3b: C->B->A->E). The tag is what keeps
               it loop-free: an upstream switch sees a tagged packet and
               follows the detour instead of its own primary.
+              OpenFlow drops a packet output to the port it arrived on, so
+              the crankback bucket cannot name that port. Packets arriving
+              from the detour's first hop get their own rule and group,
+              whose backup bucket outputs to OFPP_IN_PORT instead.
 """
 
 import heapq
@@ -42,6 +47,7 @@ Flow = namedtuple("Flow", "sw priority match actions")
 Group = namedtuple("Group", "sw gid buckets")
 
 PRIO_PRIMARY = 100
+PRIO_CRANKBACK = 110
 PRIO_DETOUR = 200
 
 
@@ -115,6 +121,10 @@ def gid_of(host):
     return int(host[1:])
 
 
+def gid_crankback(host):
+    return 1000 + gid_of(host)
+
+
 def protection_state(topo, failed=frozenset()):
     """
     Fast-failover link protection with tagged crankback detours.
@@ -155,6 +165,14 @@ def protection_state(topo, failed=frozenset()):
                     x = nhL[x]
                 add(Flow(t, PRIO_DETOUR, {"dst": h, "vlan": tag},
                          [("pop_vlan",), ("output", hp)]))
+                if nh0.get(alt) == u:
+                    # Traffic from `alt` cranks back out its own ingress port.
+                    groups.append(Group(u, gid_crankback(h), [
+                        buckets[0],
+                        (topo.port[(u, alt)], [("push_vlan", tag), ("output_in_port",)])]))
+                    add(Flow(u, PRIO_CRANKBACK,
+                             {"dst": h, "vlan": None, "in_port": topo.port[(u, alt)]},
+                             [("group", gid_crankback(h))]))
             groups.append(Group(u, gid_of(h), buckets))
             add(Flow(u, PRIO_PRIMARY, {"dst": h, "vlan": None}, [("group", gid_of(h))]))
     return list(flows.values()), groups
@@ -198,7 +216,8 @@ def forward(topo, flows, groups, src_host, dst_host, failed=frozenset(), max_hop
 
     Port liveness for fast-failover = the link is not in `failed`. Raises
     Blackhole if the packet is dropped or sent into a failed link, Loop if
-    it revisits a (switch, tag) state.
+    it revisits a (switch, tag) state. As in OpenFlow, output to the port a
+    packet arrived on is dropped; only ("output_in_port",) sends it back.
     """
     failed = {canon(*l) for l in failed}
     by_sw = {}
@@ -214,6 +233,7 @@ def forward(topo, flows, groups, src_host, dst_host, failed=frozenset(), max_hop
         return peer is None or canon(sw, peer) not in failed
 
     sw = topo.hosts[src_host]
+    in_port = topo.host_port[src_host]
     vlan = None
     trail, seen = [sw], set()
     for _ in range(max_hops):
@@ -225,6 +245,8 @@ def forward(topo, flows, groups, src_host, dst_host, failed=frozenset(), max_hop
             if f.match.get("dst") != dst_host:
                 continue
             if "vlan" in f.match and f.match["vlan"] != vlan:
+                continue
+            if "in_port" in f.match and f.match["in_port"] != in_port:
                 continue
             rule = f
             break
@@ -245,7 +267,11 @@ def forward(topo, flows, groups, src_host, dst_host, failed=frozenset(), max_hop
             elif act[0] == "pop_vlan":
                 vlan = None
             elif act[0] == "output":
+                if act[1] == in_port:
+                    raise Blackhole(("output to ingress port is dropped", sw, trail))
                 out = act[1]
+            elif act[0] == "output_in_port":
+                out = in_port
         if out is None:
             raise Blackhole(("no output", sw, trail))
         if (sw, out) not in port_peer:          # host port
@@ -256,6 +282,6 @@ def forward(topo, flows, groups, src_host, dst_host, failed=frozenset(), max_hop
             return trail
         if not live(sw, out):
             raise Blackhole(("sent into failed link", sw, out, trail))
-        sw = port_peer[(sw, out)]
+        sw, in_port = port_peer[(sw, out)], topo.port[(port_peer[(sw, out)], sw)]
         trail.append(sw)
     raise Loop(trail)
