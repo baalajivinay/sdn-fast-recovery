@@ -8,15 +8,53 @@ techniques on one testbed, with the same failures for every technique.
 | Scheme | What happens when a link fails | Controller on the critical path? |
 |---|---|---|
 | **Restoration** (reactive) | switch reports PORT_STATUS → controller recomputes → pushes new rules | yes |
-| **Protection, LoS** | OpenFlow 1.3 fast-failover group switches buckets when carrier drops | no |
+| **Protection, LoS** | OpenFlow fast-failover group switches buckets when carrier drops | no |
 | **Protection + BFD** (the paper) | as above, but BFD (1/5/15 ms) declares the link dead; crankback when no local backup | no |
 | **Hybrid** (the paper's full proposal) | protection + BFD, then the controller re-optimises off the detour | only after recovery |
 
-## Quick start (on the laptop)
+## Results
+
+Measured on Mininet 2.3, Open vSwitch 2.17.5 and os-ken, 325 trials. Controller 10 ms away
+(one-way) unless stated. All times in ms.
+
+**Protection + BFD vs the paper** (BFD interval 1 / 5 / 15 ms)
+
+| Topology | Paper | This replication |
+|---|---|---|
+| Triangle | 3.4 / 15.0 / 42.1 | 3.6 / 14.7 / 40.9 (median) |
+| 5-node ring, crankback | 3.3 / 15.4 / 46.2 | 4.8 / 17.7 / 40.7 (median) |
+| USNET, 24 nodes, BFD 5 ms | 13.6 ± 2.6 | 16.3 ± 2.9 |
+
+**All schemes, triangle** (BFD 5 ms)
+
+| Scheme | Silent failure | Carrier loss |
+|---|---|---|
+| Restoration | 34.7 ± 1.1 | 23.8 ± 1.9 |
+| Protection, LoS | never recovers (0/10) | 2.1 ± 0.3 |
+| Protection + BFD | 15.3 | – |
+| Hybrid (ring) | 15.7, re-optimised at 47.9 | – |
+
+**Other findings**
+
+- Controller distance 0 → 50 ms: restoration rises from 21.5 to 118.0 ms. Protection and
+  hybrid stay at 14–17 ms.
+- State cost on USNET: protection needs 3,293 flows + groups against 576 for restoration (5.7×).
+- BFD at 1 ms is fragile in software OVS: 3 of 20 triangle and ring trials never fired or
+  flapped, so medians are quoted there.
+- The first full run exposed a crankback bug: OpenFlow drops a packet sent back out its own
+  ingress port. Crankback buckets now use `OFPP_IN_PORT` (commit `37f26b4`), and every
+  experiment was re-run. Neither the offline tests nor the simulator caught it.
+
+Full numbers are in [`results/summary.json`](results/summary.json) and the figures in
+[`results/figures/`](results/figures/).
+
+## Quick start
+
+Needs Linux, Docker and the `openvswitch` kernel module. Everything else runs in the container.
 
 ```bash
 ./run.sh check      # Docker, openvswitch module, host OVS conflict, leftover netem
-./run.sh build      # reuses the old sdn-recovery image if present, so it takes seconds
+./run.sh build      # build the container image
 ./run.sh test       # offline tests of routing and controller (no Mininet)
 ./run.sh smoke      # 1 trial of every E1 config, about 2 minutes. Run this first.
 ./run.sh quick      # every experiment, few trials, about 20 min  -> results/quick/
@@ -24,11 +62,22 @@ techniques on one testbed, with the same failures for every technique.
 ```
 
 Each run writes `summary.json`, a printed table and PNG figures in `<results>/figures/`.
-`./run.sh sim` produces **model-based draft** results in `results_sim/` with the same files. They
-are stamped "SIMULATED" and are only placeholders until the real run is done.
+`./run.sh sim` writes model-based placeholder results to `results_sim/`, stamped "SIMULATED".
+They are not measurements.
 
 > If `./run.sh check` says `ovs-vswitchd` is running on the host, stop it for the run with
 > `sudo systemctl stop openvswitch-switch`. Two vswitchd instances share one kernel datapath.
+
+## Interactive simulator
+
+`app/` holds a self-contained visual model of the four schemes, used for the slide
+illustrations. It is a teaching aid; the numbers above come from the Mininet runs.
+
+- **Linux executable:** download `SDN_Recovery_Simulator` from the
+  [Releases](../../releases) page, then `chmod +x SDN_Recovery_Simulator && ./SDN_Recovery_Simulator`.
+- **From source:** `python3 sdn_app.py` (uses `pywebview` if installed, else your browser),
+  or just open `app/index.html`.
+- **Rebuild the executable:** `./build_app.sh` (PyInstaller) → `dist/SDN_Recovery_Simulator`.
 
 ## Experiments
 
@@ -43,7 +92,7 @@ are stamped "SIMULATED" and are only placeholders until the real run is done.
 sees loss of signal immediately. That is the best case for LoS. A *silent* failure drops every
 frame in both directions while carrier stays up, as with a fibre cut behind a transceiver or a
 line-card fault. Only BFD can see it. The paper's physical-NIC failures behaved like this from
-the recovering switch's view: OVS took **4.7 s** to notice by loss of signal.
+the recovering switch's view: OVS took about **4.8 s** to notice by loss of signal.
 
 ## Layout
 
@@ -54,9 +103,15 @@ sdnrec/        topologies.py   triangle, ring5, usnet (shared by everything)
 experiments/   run_suite.py    experiment driver (Mininet)      suite_defs.py  the matrix
                testbed.py      build net, BFD, failures, netem  traffic.py     probe stream
                analyze.py      traces -> summary.json            figures.py     PNG figures
-sim/           simulate.py     model-based draft results, same file format
 tests/         exhaustive routing test, controller test with fake switches
+docker/        container image (Mininet, OVS 2.17, os-ken) and entrypoint
+results/       summary.json and figures from the measured run
+sim/           simulate.py     model-based placeholder results, same file format
+app/           index.html      interactive simulator; media/ has demo recordings
+sdn_app.py     desktop launcher for the simulator; build_app.sh packages it
+slides/        presentation.tex / .pdf (Beamer), talk_script.txt (10-minute, 4 speakers)
 docs/          REPLICATION.md  paper-to-testbed mapping, deviations, threats to validity
+               survey.html     visual summary of the field and of these results
 ```
 
 ## How recovery is measured
@@ -68,14 +123,14 @@ paper uses. A gap-based estimate cross-checks it. Per-packet latency shows the d
 and the moment re-optimisation happens. Controller milestones come from its event log, which
 uses the same clock.
 
-## Built on lessons from the previous project
+## Notes
 
-`~/sdn-failure-recovery`, which replicated Sharma et al. 2013, contributed the container
+This builds on an earlier replication of Sharma et al. 2013, which contributed the container
 recipe, the controller-distance emulation, and the "largest gap that ends after the cut"
-analysis rule. This project fixes its stated limitations: no BFD, ingress-link failures only,
-no crankback, a 6-node topology, and a single detection mechanism.
+analysis rule. This project adds what that one lacked: BFD, interior-link failures, crankback,
+a 24-node topology, and more than one detection mechanism.
 
-One correction: its `LIMITATIONS.md` §2 says stock OVS cannot drive fast-failover from BFD. In
-OVS 2.17, `may_enable_port()` in `ofproto/ofproto-dpif.c` does make BFD gate port liveness,
-which fast-failover buckets watch. OVS also clears `OFPPS_LIVE` and sends PORT_STATUS
-(`ofproto/ofproto.c`). van Adrichem's repository notes the feature was merged in October 2014.
+Stock OVS 2.17 can drive fast-failover from BFD: `may_enable_port()` in
+`ofproto/ofproto-dpif.c` makes BFD gate port liveness, which fast-failover buckets watch, and
+OVS clears `OFPPS_LIVE` and sends PORT_STATUS (`ofproto/ofproto.c`). van Adrichem's repository
+notes the feature was merged in October 2014.

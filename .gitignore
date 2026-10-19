@@ -1,10 +1,26 @@
+# Experiment output: only the final summary and figures are tracked
 results/*
 !results/summary.json
 !results/figures/
-results_sim/*/
+results_sim/
+results_run1_crankback_bug/
+logs/
+
+# Python
 __pycache__/
 *.pyc
-docker/ca-certificates.crt
+
+# Build output (the simulator binary is published as a GitHub Release asset)
 build/
 dist/
-results_run1_crankback_bug/*/
+
+# LaTeX
+*.aux
+*.log
+*.nav
+*.out
+*.snm
+*.toc
+*.vrb
+
+docker/ca-certificates.crt
