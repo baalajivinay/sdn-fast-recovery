@@ -12,6 +12,15 @@ techniques on one testbed, with the same failures for every technique.
 | **Protection + BFD** (the paper) | as above, but BFD (1/5/15 ms) declares the link dead; crankback when no local backup | no |
 | **Hybrid** (the paper's full proposal) | protection + BFD, then the controller re-optimises off the detour | only after recovery |
 
+## Documents
+
+- [`docs/paper.pdf`](docs/paper.pdf): survey paper, *Fast Link-Failure Recovery in Software-Defined
+  Networks: A Survey of Detection and Recovery Mechanisms with Two Reproduced Benchmarks*. This
+  repository is its reproduction R2.
+- [`docs/presentation.pdf`](docs/presentation.pdf): project presentation (Abstract, Introduction,
+  Methodology, Implementation, Results, Conclusion & Future Work).
+- [`docs/REPLICATION.md`](docs/REPLICATION.md): paper-to-testbed mapping, deviations, threats to validity.
+
 ## Results
 
 Measured on Mininet 2.3, Open vSwitch 2.17.5 and os-ken, 325 trials. Controller 10 ms away
@@ -39,8 +48,8 @@ Measured on Mininet 2.3, Open vSwitch 2.17.5 and os-ken, 325 trials. Controller 
 - Controller distance 0 → 50 ms: restoration rises from 21.5 to 118.0 ms. Protection and
   hybrid stay at 14–17 ms.
 - State cost on USNET: protection needs 3,293 flows + groups against 576 for restoration (5.7×).
-- BFD at 1 ms is fragile in software OVS: 3 of 20 triangle and ring trials never fired or
-  flapped, so medians are quoted there.
+- BFD at 1 ms is fragile in software OVS: 4 of 20 triangle and ring trials were anomalous (one
+  failure was never detected), so medians are quoted there.
 - The first full run exposed a crankback bug: OpenFlow drops a packet sent back out its own
   ingress port. Crankback buckets now use `OFPP_IN_PORT` (commit `832626e`), and every
   experiment was re-run. Neither the offline tests nor the simulator caught it.
@@ -48,7 +57,24 @@ Measured on Mininet 2.3, Open vSwitch 2.17.5 and os-ken, 325 trials. Controller 
 Full numbers are in [`results/summary.json`](results/summary.json) and the figures in
 [`results/figures/`](results/figures/).
 
-## Replicate it (one container)
+## How to run
+
+There are two things to run: the **interactive simulator** (a visual model of the four schemes,
+no setup) and the **experiments** (the real Mininet measurements, in one Docker container).
+
+### 1. Interactive simulator
+
+`app/` holds a self-contained visual model of the four schemes. It is a teaching aid; the
+numbers above come from the Mininet runs.
+
+- **Linux executable:** download `SDN_Recovery_Simulator-linux-x86_64` from the
+  [Releases](../../releases) page, then
+  `chmod +x SDN_Recovery_Simulator-linux-x86_64 && ./SDN_Recovery_Simulator-linux-x86_64`.
+- **From source:** `python3 sdn_app.py` (uses `pywebview` if installed, else your browser),
+  or just open `app/index.html`.
+- **Rebuild the executable:** `./build_app.sh` (PyInstaller) → `dist/SDN_Recovery_Simulator`.
+
+### 2. Experiments (one container)
 
 Everything needed is in one Docker image: Mininet 2.3, Open vSwitch 2.17.5, os-ken 4.2.1, the
 pinned Python packages of the measured run, and the experiment code. No clone needed.
@@ -86,23 +112,11 @@ placeholder results to `results_sim/`, stamped "SIMULATED"; they are not measure
 **Building the image yourself:** `docker build -t sdn-fast-recovery .` from a clone. The base
 image is pinned by digest and Python packages by `docker/constraints.txt`.
 
-### Working on the code
+### 3. Working on the code
 
 `./run.sh <command>` runs the same commands with the repo mounted over `/work`, so edits take
 effect without a rebuild. `./run.sh check` also checks for a host `ovs-vswitchd` and a
 leftover loopback delay, and `./run.sh build` builds the local image.
-
-## Interactive simulator
-
-`app/` holds a self-contained visual model of the four schemes. It is a teaching aid; the
-numbers above come from the Mininet runs.
-
-- **Linux executable:** download `SDN_Recovery_Simulator-linux-x86_64` from the
-  [Releases](../../releases) page, then
-  `chmod +x SDN_Recovery_Simulator-linux-x86_64 && ./SDN_Recovery_Simulator-linux-x86_64`.
-- **From source:** `python3 sdn_app.py` (uses `pywebview` if installed, else your browser),
-  or just open `app/index.html`.
-- **Rebuild the executable:** `./build_app.sh` (PyInstaller) → `dist/SDN_Recovery_Simulator`.
 
 ## Experiments
 
